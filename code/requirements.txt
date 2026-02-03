@@ -1,0 +1,9 @@
+# OpenSearch
+opensearch-py>=2.4.0
+
+# Azure OpenAI
+openai>=1.0.0
+
+# Utilidades
+python-dotenv>=1.0.0
+faker>=22.0.0

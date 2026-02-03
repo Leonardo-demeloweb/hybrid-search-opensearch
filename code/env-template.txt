@@ -1,0 +1,24 @@
+# =============================================================================
+# Azure OpenAI - Configuração para Embeddings
+# =============================================================================
+# Renomeie este arquivo para .env e preencha com suas credenciais.
+# O arquivo .env NÃO será commitado (está no .gitignore).
+
+# API Key do Azure OpenAI
+AZURE_OPENAI_API_KEY=sua-api-key-aqui
+
+# Endpoint do recurso Azure OpenAI
+AZURE_OPENAI_ENDPOINT=https://seu-recurso.openai.azure.com/
+
+# Nome do deployment de embeddings (text-embedding-3-small recomendado)
+AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT_NAME=text-embedding-3-small
+
+# Versão da API
+AZURE_OPENAI_API_VERSION=2025-01-01-preview
+
+# =============================================================================
+# OpenSearch Local
+# =============================================================================
+
+OPENSEARCH_HOST=localhost
+OPENSEARCH_PORT=9200

@@ -1,0 +1,20 @@
+# Credenciais
+.env
+*.env
+.env.*
+!env-template.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+venv/
+.venv/
+
+# Dados gerados (regenerar com 02_generate_data.py)
+data/*.json
+
+# OS
+.DS_Store
+Thumbs.db
