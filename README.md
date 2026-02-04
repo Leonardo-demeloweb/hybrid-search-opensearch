@@ -10,8 +10,8 @@
 Resume:
 
 Traditional keyword-based search engines fail to capture semantic meaning and spatial context, leading to poor relevance in modern applications. This article presents a comprehensive approach to hybrid search that combines three complementary techniques: BM25 full-text search for lexical matching, k-NN vector search using neural embeddings for semantic similarity, and geospatial queries for location-based filtering. We demonstrate a complete implementation using OpenSearch with Azure OpenAI embeddings (text-embedding-3-small, 1536 dimensions), achieving 92% recall compared to 65% with full-text alone. The article covers theoretical foundations, index design with HNSW algorithm tuning, scoring strategies including Reciprocal Rank Fusion (RRF), and production considerations such as sharding, caching, and fallback mechanisms. All code is open-source and includes a Docker-based local environment for reproduction.
----
 
+---
 ## 📋 Table of Contents
 
 1. [Introduction](#1-introduction)
