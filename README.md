@@ -1,6 +1,6 @@
-# Busca Híbrida em Escala: Full-Text + Vetores + Geolocalização
+# Hybrid Search at Scale: Full-Text + Vectors + Geolocation
 
-> **Combinando BM25, k-NN e Geo Queries com OpenSearch/Elasticsearch**
+> **Combining BM25, k-NN and Geo Queries with OpenSearch/Elasticsearch**
 
 [![OpenSearch](https://img.shields.io/badge/OpenSearch-2.11+-blue)](https://opensearch.org/)
 [![Elasticsearch](https://img.shields.io/badge/Elasticsearch-8.x-yellow)](https://www.elastic.co/)
@@ -8,151 +8,151 @@
 
 ---
 
-## 📋 Sumário
+## 📋 Table of Contents
 
-1. [Introdução](#1-introdução)
-2. [Fundamentos Teóricos](#2-fundamentos-teóricos)
+1. [Introduction](#1-introduction)
+2. [Theoretical Foundations](#2-theoretical-foundations)
 3. [Elasticsearch vs OpenSearch](#3-elasticsearch-vs-opensearch)
-4. [Arquitetura da Solução](#4-arquitetura-da-solução)
-5. [Implementação Prática](#5-implementação-prática)
-6. [Otimização e Performance](#6-otimização-e-performance)
-7. [Produção e Observabilidade](#7-produção-e-observabilidade)
-8. [Conclusão](#8-conclusão)
+4. [Solution Architecture](#4-solution-architecture)
+5. [Practical Implementation](#5-practical-implementation)
+6. [Optimization and Performance](#6-optimization-and-performance)
+7. [Production and Observability](#7-production-and-observability)
+8. [Conclusion](#8-conclusion)
 
 ---
 
-## 1. Introdução
+## 1. Introduction
 
-### O Problema: Limitações da Busca Tradicional
+### The Problem: Limitations of Traditional Search
 
-Imagine um sistema de busca de **estabelecimentos comerciais** no Brasil. Um usuário digita:
+Imagine a search system for **commercial establishments**. A user types:
 
-> *"oficina mecânica especializada em carros importados perto de mim"*
+> *"auto repair shop specialized in imported cars near me"*
 
-Uma busca tradicional baseada apenas em **full-text search** (BM25) encontraria documentos que contêm exatamente essas palavras. Mas e se o estabelecimento estiver cadastrado como:
+A traditional search based only on **full-text search** (BM25) would find documents containing exactly those words. But what if the establishment is registered as:
 
-- *"Centro automotivo - reparos em veículos premium"*
-- *"Auto service - manutenção BMW, Mercedes, Audi"*
+- *"Automotive center - premium vehicle repairs"*
+- *"Auto service - BMW, Mercedes, Audi maintenance"*
 
-O full-text falharia em conectar **"oficina mecânica"** com **"centro automotivo"**, e **"carros importados"** com **"BMW, Mercedes"**. Além disso, o **"perto de mim"** sequer seria processado.
+Full-text would fail to connect **"auto repair shop"** with **"automotive center"**, and **"imported cars"** with **"BMW, Mercedes"**. Furthermore, **"near me"** wouldn't even be processed.
 
-### A Solução: Busca Híbrida Multi-Modal
+### The Solution: Multi-Modal Hybrid Search
 
-A **busca híbrida** combina três técnicas complementares:
+**Hybrid search** combines three complementary techniques:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         QUERY: "oficina mecânica carros importados"          │
-│                         LOCALIZAÇÃO: São Paulo, SP (-23.55, -46.63)          │
+│                         QUERY: "auto repair imported cars"                   │
+│                         LOCATION: New York, NY (40.71, -74.00)              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐           │
-│  │  1. FULL-TEXT   │   │  2. VETORIAL    │   │  3. GEOESPACIAL │           │
+│  │  1. FULL-TEXT   │   │  2. VECTOR      │   │  3. GEOSPATIAL  │           │
 │  │     (BM25)      │   │    (k-NN)       │   │   (geo_point)   │           │
 │  ├─────────────────┤   ├─────────────────┤   ├─────────────────┤           │
 │  │                 │   │                 │   │                 │           │
-│  │ Busca tokens:   │   │ Embedding da    │   │ Filtro por      │           │
-│  │ "oficina"       │   │ query →         │   │ distância:      │           │
-│  │ "mecânica"      │   │ encontra docs   │   │ raio de 10km    │           │
-│  │ "carros"        │   │ semanticamente  │   │ do ponto        │           │
-│  │ "importados"    │   │ similares       │   │ informado       │           │
+│  │ Search tokens:  │   │ Query embedding │   │ Distance        │           │
+│  │ "auto"          │   │ → finds docs    │   │ filter:         │           │
+│  │ "repair"        │   │ semantically    │   │ 10km radius     │           │
+│  │ "imported"      │   │ similar         │   │ from point      │           │
+│  │ "cars"          │   │                 │   │                 │           │
 │  │                 │   │                 │   │                 │           │
-│  │ ✓ Match exato   │   │ ✓ "auto service"│   │ ✓ Apenas        │           │
-│  │                 │   │ ✓ "BMW, Audi"   │   │   próximos      │           │
+│  │ ✓ Exact match   │   │ ✓ "auto service"│   │ ✓ Only          │           │
+│  │                 │   │ ✓ "BMW, Audi"   │   │   nearby        │           │
 │  └────────┬────────┘   └────────┬────────┘   └────────┬────────┘           │
 │           │                     │                     │                     │
 │           └──────────┬──────────┴──────────┬──────────┘                     │
 │                      │                     │                                │
 │                      ▼                     ▼                                │
 │           ┌─────────────────────────────────────────┐                       │
-│           │         SCORE COMBINADO                  │                       │
+│           │         COMBINED SCORE                   │                       │
 │           │  (0.3 × BM25) + (0.5 × kNN) + (0.2 × geo)│                       │
-│           │         = Relevância Final               │                       │
+│           │         = Final Relevance                │                       │
 │           └─────────────────────────────────────────┘                       │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Case de Uso: Busca de Estabelecimentos por CNAE
+### Use Case: Business Establishment Search by Industry Code
 
-Neste artigo, construiremos um sistema de busca híbrida usando dados públicos de **CNAEs** (Classificação Nacional de Atividades Econômicas) combinados com **estabelecimentos fictícios** geolocalizados.
+In this article, we'll build a hybrid search system using public **industry classification codes** combined with **fictitious geolocated establishments**.
 
-O índice terá:
+The index will have:
 
-| Campo | Tipo | Busca |
-|-------|------|-------|
-| `descricao_atividade` | text (BM25) | Full-text |
-| `embedding` | knn_vector (1536d) | Semântica |
-| `localizacao` | geo_point | Geoespacial |
-| `cnae`, `razao_social` | keyword/text | Filtros |
+| Field | Type | Search |
+|-------|------|--------|
+| `activity_description` | text (BM25) | Full-text |
+| `embedding` | knn_vector (1536d) | Semantic |
+| `location` | geo_point | Geospatial |
+| `industry_code`, `company_name` | keyword/text | Filters |
 
 ---
 
-## 2. Fundamentos Teóricos
+## 2. Theoretical Foundations
 
 ### 2.1 Full-Text Search (BM25)
 
-O algoritmo **BM25** (Best Matching 25) é o padrão para busca textual. Ele calcula a relevância baseado em:
+The **BM25** (Best Matching 25) algorithm is the standard for text search. It calculates relevance based on:
 
-- **TF (Term Frequency)**: Quantas vezes o termo aparece no documento
-- **IDF (Inverse Document Frequency)**: Quão raro é o termo no corpus
-- **Document Length Normalization**: Documentos mais curtos têm boost
+- **TF (Term Frequency)**: How many times the term appears in the document
+- **IDF (Inverse Document Frequency)**: How rare the term is in the corpus
+- **Document Length Normalization**: Shorter documents get a boost
 
-**Fórmula simplificada:**
+**Simplified formula:**
 
 ```
 score(D, Q) = Σ IDF(qi) × (f(qi, D) × (k1 + 1)) / (f(qi, D) + k1 × (1 - b + b × |D|/avgdl))
 ```
 
-Onde:
-- `k1` = 1.2 (saturação de frequência)
-- `b` = 0.75 (normalização por tamanho)
+Where:
+- `k1` = 1.2 (frequency saturation)
+- `b` = 0.75 (length normalization)
 
-**Limitação:** BM25 é **lexical** - não entende sinônimos ou contexto semântico.
+**Limitation:** BM25 is **lexical** - it doesn't understand synonyms or semantic context.
 
 ```python
-# Exemplo: BM25 não conecta estes termos
-query = "carro"
-doc1 = "automóvel"  # ❌ BM25 não encontra
-doc2 = "veículo"    # ❌ BM25 não encontra
-doc3 = "carro"      # ✅ Match exato
+# Example: BM25 doesn't connect these terms
+query = "car"
+doc1 = "automobile"  # ❌ BM25 doesn't find
+doc2 = "vehicle"     # ❌ BM25 doesn't find
+doc3 = "car"         # ✅ Exact match
 ```
 
-### 2.2 Busca Vetorial (k-NN / ANN)
+### 2.2 Vector Search (k-NN / ANN)
 
-A busca vetorial representa textos como **vetores de alta dimensão** (embeddings) onde textos semanticamente similares estão próximos no espaço vetorial.
+Vector search represents texts as **high-dimensional vectors** (embeddings) where semantically similar texts are close in vector space.
 
-**Como funciona:**
+**How it works:**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  ESPAÇO VETORIAL (simplificado em 2D)                           │
+│  VECTOR SPACE (simplified in 2D)                                │
 │                                                                 │
-│     "automóvel" ●──────────● "carro"                           │
-│                    \      /                                     │
-│                     \    /                                      │
-│                      \  /                                       │
-│                       ●                                         │
-│                   "veículo"                                     │
+│     "automobile" ●──────────● "car"                            │
+│                     \      /                                    │
+│                      \    /                                     │
+│                       \  /                                      │
+│                        ●                                        │
+│                    "vehicle"                                    │
 │                                                                 │
-│                                        ● "bicicleta"            │
+│                                        ● "bicycle"              │
 │                                                                 │
 │                                                                 │
-│                    ● "restaurante"                              │
+│                    ● "restaurant"                               │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Algoritmo k-NN (k-Nearest Neighbors):**
-- Dado um vetor de query, encontra os `k` vetores mais próximos
-- Distância medida por **cosseno** (similaridade) ou **euclidiana**
+**k-NN Algorithm (k-Nearest Neighbors):**
+- Given a query vector, finds the `k` closest vectors
+- Distance measured by **cosine** (similarity) or **euclidean**
 
 **ANN (Approximate Nearest Neighbors):**
-- k-NN exato é O(n) - muito lento para milhões de documentos
-- HNSW (Hierarchical Navigable Small World) oferece busca aproximada em O(log n)
+- Exact k-NN is O(n) - too slow for millions of documents
+- HNSW (Hierarchical Navigable Small World) offers approximate search in O(log n)
 
 ```python
-# Embedding com Azure OpenAI
+# Embedding with Azure OpenAI
 from openai import AzureOpenAI
 import os
 
@@ -165,64 +165,64 @@ client = AzureOpenAI(
 def get_embedding(text: str) -> list[float]:
     deployment = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT_NAME")
     response = client.embeddings.create(
-        model=deployment,  # Nome do deployment no Azure
+        model=deployment,  # Deployment name in Azure
         input=text
     )
-    return response.data[0].embedding  # 1536 dimensões
+    return response.data[0].embedding  # 1536 dimensions
 ```
 
-### 2.3 Busca Geoespacial
+### 2.3 Geospatial Search
 
-OpenSearch/Elasticsearch suportam dois tipos de dados geográficos:
+OpenSearch/Elasticsearch support two types of geographic data:
 
-| Tipo | Uso | Exemplo |
+| Type | Use | Example |
 |------|-----|---------|
-| `geo_point` | Ponto único (lat/lon) | Localização de uma loja |
-| `geo_shape` | Polígonos, linhas | Área de cobertura, rota |
+| `geo_point` | Single point (lat/lon) | Store location |
+| `geo_shape` | Polygons, lines | Coverage area, route |
 
-**Queries geoespaciais:**
+**Geospatial queries:**
 
 ```json
-// Distância de um ponto
+// Distance from a point
 {
   "geo_distance": {
     "distance": "10km",
-    "localizacao": { "lat": -23.55, "lon": -46.63 }
+    "location": { "lat": 40.71, "lon": -74.00 }
   }
 }
 
-// Dentro de um bounding box
+// Within a bounding box
 {
   "geo_bounding_box": {
-    "localizacao": {
-      "top_left": { "lat": -23.4, "lon": -46.8 },
-      "bottom_right": { "lat": -23.7, "lon": -46.5 }
+    "location": {
+      "top_left": { "lat": 40.9, "lon": -74.3 },
+      "bottom_right": { "lat": 40.5, "lon": -73.7 }
     }
   }
 }
 ```
 
-### 2.4 Por que Combinar? (Complementaridade)
+### 2.4 Why Combine? (Complementarity)
 
-Cada técnica tem forças e fraquezas:
+Each technique has strengths and weaknesses:
 
-| Aspecto | Full-Text (BM25) | Vetorial (k-NN) | Geo |
-|---------|------------------|-----------------|-----|
-| **Força** | Match exato, rápido | Semântica, sinônimos | Proximidade física |
-| **Fraqueza** | Não entende contexto | Mais lento, requer embeddings | Só localização |
-| **Quando usar** | Termos específicos | Linguagem natural | "Perto de mim" |
+| Aspect | Full-Text (BM25) | Vector (k-NN) | Geo |
+|--------|------------------|---------------|-----|
+| **Strength** | Exact match, fast | Semantics, synonyms | Physical proximity |
+| **Weakness** | No context understanding | Slower, requires embeddings | Location only |
+| **When to use** | Specific terms | Natural language | "Near me" |
 
-**A combinação é poderosa porque:**
+**The combination is powerful because:**
 
-1. **BM25** garante que termos exatos tenham peso (ex: código CNAE específico)
-2. **k-NN** expande semanticamente (ex: "mecânica" → "auto service")
-3. **Geo** filtra por relevância geográfica (ex: só na minha cidade)
+1. **BM25** ensures exact terms have weight (e.g., specific industry code)
+2. **k-NN** expands semantically (e.g., "mechanic" → "auto service")
+3. **Geo** filters by geographic relevance (e.g., only in my city)
 
 ---
 
 ## 3. Elasticsearch vs OpenSearch
 
-### 3.1 Histórico e Fork
+### 3.1 History and Fork
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -245,76 +245,76 @@ Cada técnica tem forças e fraquezas:
 │                                │License│       │License│                   │
 │                                └───────┘       └───────┘                   │
 │                                                                             │
-│  Elastic mudou para SSPL (2021) → AWS criou OpenSearch (fork do 7.10)      │
+│  Elastic changed to SSPL (2021) → AWS created OpenSearch (fork of 7.10)    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Comparativo para Busca Híbrida
+### 3.2 Comparison for Hybrid Search
 
 | Feature | Elasticsearch 8.x | OpenSearch 2.x |
 |---------|-------------------|----------------|
-| **Full-text (BM25)** | ✅ Nativo | ✅ Nativo |
+| **Full-text (BM25)** | ✅ Native | ✅ Native |
 | **k-NN Vector** | ✅ `dense_vector` | ✅ `knn_vector` |
-| **Geo queries** | ✅ Completo | ✅ Completo |
+| **Geo queries** | ✅ Complete | ✅ Complete |
 | **HNSW Engine** | Lucene | Lucene, nmslib, Faiss |
-| **Neural Search** | ❌ Requer plugin | ✅ ML Commons nativo |
-| **Hybrid Query** | `knn` + `query` | `hybrid` query nativa |
-| **Licença** | SSPL / Elastic License | Apache 2.0 |
-| **Cloud gerenciado** | Elastic Cloud | AWS OpenSearch Service |
+| **Neural Search** | ❌ Requires plugin | ✅ ML Commons native |
+| **Hybrid Query** | `knn` + `query` | Native `hybrid` query |
+| **License** | SSPL / Elastic License | Apache 2.0 |
+| **Managed Cloud** | Elastic Cloud | AWS OpenSearch Service |
 
-### 3.3 Compatibilidade de APIs
+### 3.3 API Compatibility
 
-A maioria das APIs é compatível entre ES e OS:
+Most APIs are compatible between ES and OS:
 
 ```python
-# Funciona em AMBOS
-from opensearchpy import OpenSearch  # ou elasticsearch
+# Works on BOTH
+from opensearchpy import OpenSearch  # or elasticsearch
 
 client = OpenSearch(hosts=["localhost:9200"])
 
-# Mesmo DSL para queries básicas
-client.search(index="meu_indice", body={
+# Same DSL for basic queries
+client.search(index="my_index", body={
     "query": {
         "bool": {
-            "must": [{"match": {"descricao": "oficina"}}],
-            "filter": [{"geo_distance": {"distance": "10km", "loc": {"lat": -23.5, "lon": -46.6}}}]
+            "must": [{"match": {"description": "repair"}}],
+            "filter": [{"geo_distance": {"distance": "10km", "loc": {"lat": 40.7, "lon": -74.0}}}]
         }
     }
 })
 ```
 
-**Diferenças principais:**
+**Main differences:**
 
-| Operação | Elasticsearch | OpenSearch |
-|----------|---------------|------------|
+| Operation | Elasticsearch | OpenSearch |
+|-----------|---------------|------------|
 | k-NN query | `"knn": {...}` | `"knn": {...}` (similar) |
-| k-NN + BM25 | `knn` dentro de `query` | `hybrid` query |
+| k-NN + BM25 | `knn` inside `query` | `hybrid` query |
 | Vector field | `dense_vector` | `knn_vector` |
 | HNSW params | `index_options` | `method.parameters` |
 
-### 3.4 Quando Usar Cada Um
+### 3.4 When to Use Each
 
-| Cenário | Recomendação |
-|---------|--------------|
-| Já usa AWS | **OpenSearch** (integração nativa) |
-| Precisa de ML nativo | **OpenSearch** (ML Commons) |
-| Já tem stack Elastic | **Elasticsearch** (menos migração) |
-| Open source puro | **OpenSearch** (Apache 2.0) |
-| Observabilidade integrada | **Elasticsearch** (APM, Logs) |
+| Scenario | Recommendation |
+|----------|---------------|
+| Already using AWS | **OpenSearch** (native integration) |
+| Need native ML | **OpenSearch** (ML Commons) |
+| Already have Elastic stack | **Elasticsearch** (less migration) |
+| Pure open source | **OpenSearch** (Apache 2.0) |
+| Integrated observability | **Elasticsearch** (APM, Logs) |
 
-**Para este artigo:** Usaremos **OpenSearch** por ser open source e ter `hybrid` query nativa.
+**For this article:** We'll use **OpenSearch** as it's open source and has native `hybrid` query.
 
 ---
 
-## 4. Arquitetura da Solução
+## 4. Solution Architecture
 
-### 4.1 Design do Índice (Mapping)
+### 4.1 Index Design (Mapping)
 
-Nosso índice `estabelecimentos_v001` combinará as três modalidades:
+Our `establishments_v001` index will combine all three modalities:
 
 ```json
-PUT /estabelecimentos_v001
+PUT /establishments_v001
 {
   "settings": {
     "index": {
@@ -324,24 +324,24 @@ PUT /estabelecimentos_v001
     },
     "analysis": {
       "filter": {
-        "brazilian_stop": {
+        "english_stop": {
           "type": "stop",
-          "stopwords": "_brazilian_"
+          "stopwords": "_english_"
         },
-        "brazilian_stemmer": {
+        "english_stemmer": {
           "type": "stemmer",
-          "language": "brazilian"
+          "language": "english"
         }
       },
       "analyzer": {
-        "brazilian_text": {
+        "english_text": {
           "type": "custom",
           "tokenizer": "standard",
           "filter": [
             "lowercase",
             "asciifolding",
-            "brazilian_stop",
-            "brazilian_stemmer"
+            "english_stop",
+            "english_stemmer"
           ]
         }
       }
@@ -349,27 +349,27 @@ PUT /estabelecimentos_v001
   },
   "mappings": {
     "properties": {
-      "cnpj": {
+      "business_id": {
         "type": "keyword"
       },
-      "razao_social": {
+      "company_name": {
         "type": "text",
-        "analyzer": "brazilian_text"
+        "analyzer": "english_text"
       },
-      "cnae_codigo": {
+      "industry_code": {
         "type": "keyword"
       },
-      "cnae_descricao": {
+      "industry_description": {
         "type": "text",
-        "analyzer": "brazilian_text"
+        "analyzer": "english_text"
       },
-      "atividade_descritiva": {
+      "activity_description": {
         "type": "text",
-        "analyzer": "brazilian_text"
+        "analyzer": "english_text"
       },
-      "texto_busca": {
+      "search_text": {
         "type": "text",
-        "analyzer": "brazilian_text"
+        "analyzer": "english_text"
       },
       "embedding": {
         "type": "knn_vector",
@@ -384,24 +384,24 @@ PUT /estabelecimentos_v001
           }
         }
       },
-      "localizacao": {
+      "location": {
         "type": "geo_point"
       },
-      "endereco": {
+      "address": {
         "type": "object",
         "properties": {
-          "logradouro": { "type": "text" },
-          "numero": { "type": "keyword" },
-          "bairro": { "type": "text" },
-          "municipio": { "type": "keyword" },
-          "uf": { "type": "keyword" },
-          "cep": { "type": "keyword" }
+          "street": { "type": "text" },
+          "number": { "type": "keyword" },
+          "neighborhood": { "type": "text" },
+          "city": { "type": "keyword" },
+          "state": { "type": "keyword" },
+          "zip_code": { "type": "keyword" }
         }
       },
-      "situacao_cadastral": {
+      "status": {
         "type": "keyword"
       },
-      "porte": {
+      "size": {
         "type": "keyword"
       }
     }
@@ -409,33 +409,33 @@ PUT /estabelecimentos_v001
 }
 ```
 
-### 4.2 Pipeline de Ingestão
+### 4.2 Ingestion Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        PIPELINE DE INGESTÃO                                  │
+│                        INGESTION PIPELINE                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│  │  1. FONTE   │    │ 2. ENRICH   │    │ 3. EMBED    │    │ 4. INDEX    │  │
+│  │  1. SOURCE  │    │ 2. ENRICH   │    │ 3. EMBED    │    │ 4. INDEX    │  │
 │  │             │    │             │    │             │    │             │  │
-│  │ CSV/JSON    │───▶│ Concatenar  │───▶│ OpenAI API  │───▶│ Bulk API    │  │
-│  │ CNAE + Emp. │    │ texto_busca │    │ embedding   │    │ OpenSearch  │  │
-│  │             │    │             │    │ 1536 dims   │    │             │  │
+│  │ CSV/JSON    │───▶│ Concatenate │───▶│ OpenAI API  │───▶│ Bulk API    │  │
+│  │ Industry +  │    │ search_text │    │ embedding   │    │ OpenSearch  │  │
+│  │ Companies   │    │             │    │ 1536 dims   │    │             │  │
 │  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
 │                                                                             │
-│  texto_busca = f"{razao_social}. {cnae_descricao}. {atividade_descritiva}" │
+│  search_text = f"{company_name}. {industry_desc}. {activity_description}"  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.3 Estratégias de Scoring Híbrido
+### 4.3 Hybrid Scoring Strategies
 
-Existem 3 abordagens principais para combinar scores:
+There are 3 main approaches to combine scores:
 
 #### A) Post-fusion (Reciprocal Rank Fusion - RRF)
 
-Executa queries separadas e combina rankings:
+Executes separate queries and combines rankings:
 
 ```
 RRF_score = Σ 1 / (k + rank_i)
@@ -443,44 +443,44 @@ RRF_score = Σ 1 / (k + rank_i)
 
 #### B) Score Combination (Weighted Sum)
 
-Normaliza e soma scores com pesos:
+Normalizes and sums scores with weights:
 
 ```
 final_score = w1 × norm(bm25) + w2 × norm(knn) + w3 × norm(geo)
 ```
 
-#### C) OpenSearch Hybrid Query (Recomendado)
+#### C) OpenSearch Hybrid Query (Recommended)
 
-Query nativa que faz fusão internamente:
+Native query that performs fusion internally:
 
 ```json
 {
   "query": {
     "hybrid": {
       "queries": [
-        { "match": { "texto_busca": "oficina mecânica" } },
+        { "match": { "search_text": "auto repair" } },
         { "knn": { "embedding": { "vector": [...], "k": 10 } } }
       ]
     }
   },
   "post_filter": {
-    "geo_distance": { "distance": "10km", "localizacao": {...} }
+    "geo_distance": { "distance": "10km", "location": {...} }
   }
 }
 ```
 
 ---
 
-## 5. Implementação Prática
+## 5. Practical Implementation
 
-### 5.1 Criando o Índice Híbrido
+### 5.1 Creating the Hybrid Index
 
 ```python
 from opensearchpy import OpenSearch
 
 client = OpenSearch(hosts=["localhost:9200"])
 
-# Criar índice com k-NN habilitado
+# Create index with k-NN enabled
 INDEX_SETTINGS = {
     "settings": {
         "index": {
@@ -489,18 +489,18 @@ INDEX_SETTINGS = {
         },
         "analysis": {
             "analyzer": {
-                "brazilian_text": {
+                "english_text": {
                     "type": "custom",
                     "tokenizer": "standard",
                     "filter": ["lowercase", "asciifolding", 
-                              "brazilian_stop", "brazilian_stemmer"]
+                              "english_stop", "english_stemmer"]
                 }
             }
         }
     },
     "mappings": {
         "properties": {
-            "texto_busca": {"type": "text", "analyzer": "brazilian_text"},
+            "search_text": {"type": "text", "analyzer": "english_text"},
             "embedding": {
                 "type": "knn_vector",
                 "dimension": 1536,
@@ -510,39 +510,39 @@ INDEX_SETTINGS = {
                     "engine": "lucene"
                 }
             },
-            "localizacao": {"type": "geo_point"}
+            "location": {"type": "geo_point"}
         }
     }
 }
 
-client.indices.create(index="estabelecimentos_v001", body=INDEX_SETTINGS)
+client.indices.create(index="establishments_v001", body=INDEX_SETTINGS)
 ```
 
-### 5.2 Configurando Analyzers para Português
+### 5.2 Configuring Analyzers for English
 
-O analyzer `brazilian_text` processa texto em português:
+The `english_text` analyzer processes English text:
 
 ```json
 {
   "analysis": {
     "filter": {
-      "brazilian_stop": {
+      "english_stop": {
         "type": "stop",
-        "stopwords": "_brazilian_"  // Remove: de, da, para, com, etc.
+        "stopwords": "_english_"  // Removes: the, a, an, is, etc.
       },
-      "brazilian_stemmer": {
+      "english_stemmer": {
         "type": "stemmer",
-        "language": "brazilian"  // carros → carr, mecânica → mecan
+        "language": "english"  // cars → car, mechanical → mechan
       }
     },
     "analyzer": {
-      "brazilian_text": {
+      "english_text": {
         "tokenizer": "standard",
         "filter": [
-          "lowercase",      // OFICINA → oficina
-          "asciifolding",   // mecânica → mecanica
-          "brazilian_stop",
-          "brazilian_stemmer"
+          "lowercase",      // REPAIR → repair
+          "asciifolding",   // café → cafe
+          "english_stop",
+          "english_stemmer"
         ]
       }
     }
@@ -550,26 +550,26 @@ O analyzer `brazilian_text` processa texto em português:
 }
 ```
 
-**Teste do analyzer:**
+**Testing the analyzer:**
 
 ```bash
-POST /estabelecimentos_v001/_analyze
+POST /establishments_v001/_analyze
 {
-  "analyzer": "brazilian_text",
-  "text": "Oficina Mecânica de Carros Importados"
+  "analyzer": "english_text",
+  "text": "Auto Repair Shop for Imported Cars"
 }
 
-# Resultado: ["oficin", "mecan", "carr", "import"]
+# Result: ["auto", "repair", "shop", "import", "car"]
 ```
 
-### 5.3 Indexando Documentos com Embeddings
+### 5.3 Indexing Documents with Embeddings
 
 ```python
 from openai import AzureOpenAI
 from opensearchpy import helpers
 import os
 
-# Configuração Azure OpenAI
+# Azure OpenAI configuration
 azure_client = AzureOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
@@ -578,7 +578,7 @@ azure_client = AzureOpenAI(
 EMBEDDINGS_DEPLOYMENT = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT_NAME")
 
 def get_embedding(text: str) -> list[float]:
-    """Gera embedding com Azure OpenAI."""
+    """Generate embedding with Azure OpenAI."""
     response = azure_client.embeddings.create(
         model=EMBEDDINGS_DEPLOYMENT,
         input=text
@@ -586,68 +586,68 @@ def get_embedding(text: str) -> list[float]:
     return response.data[0].embedding
 
 def prepare_document(doc: dict) -> dict:
-    """Prepara documento para indexação."""
-    # Concatenar texto para busca
-    texto = f"{doc['razao_social']}. {doc['cnae_descricao']}. {doc['atividade']}"
+    """Prepare document for indexing."""
+    # Concatenate text for search
+    text = f"{doc['company_name']}. {doc['industry_description']}. {doc['activity']}"
     
     return {
         **doc,
-        "texto_busca": texto,
-        "embedding": get_embedding(texto)
+        "search_text": text,
+        "embedding": get_embedding(text)
     }
 
 # Bulk indexing
 documents = [prepare_document(d) for d in raw_documents]
 actions = [
-    {"_index": "estabelecimentos_v001", "_source": doc}
+    {"_index": "establishments_v001", "_source": doc}
     for doc in documents
 ]
 helpers.bulk(client, actions)
 ```
 
-### 5.4 Queries Híbridas (3 Abordagens)
+### 5.4 Hybrid Queries (3 Approaches)
 
-#### Abordagem 1: Full-Text + Geo (Sem Vetores)
+#### Approach 1: Full-Text + Geo (No Vectors)
 
 ```python
-def busca_fulltext_geo(query: str, lat: float, lon: float, raio_km: float):
-    """Busca textual filtrada por localização."""
+def search_fulltext_geo(query: str, lat: float, lon: float, radius_km: float):
+    """Text search filtered by location."""
     return client.search(
-        index="estabelecimentos_v001",
+        index="establishments_v001",
         body={
             "query": {
                 "bool": {
                     "must": {
                         "multi_match": {
                             "query": query,
-                            "fields": ["razao_social^2", "cnae_descricao", "texto_busca"]
+                            "fields": ["company_name^2", "industry_description", "search_text"]
                         }
                     },
                     "filter": {
                         "geo_distance": {
-                            "distance": f"{raio_km}km",
-                            "localizacao": {"lat": lat, "lon": lon}
+                            "distance": f"{radius_km}km",
+                            "location": {"lat": lat, "lon": lon}
                         }
                     }
                 }
             },
             "sort": [
                 "_score",
-                {"_geo_distance": {"localizacao": {"lat": lat, "lon": lon}, "order": "asc"}}
+                {"_geo_distance": {"location": {"lat": lat, "lon": lon}, "order": "asc"}}
             ]
         }
     )
 ```
 
-#### Abordagem 2: Vetorial + Geo (Sem BM25)
+#### Approach 2: Vector + Geo (No BM25)
 
 ```python
-def busca_vetorial_geo(query: str, lat: float, lon: float, raio_km: float, k: int = 10):
-    """Busca semântica filtrada por localização."""
+def search_vector_geo(query: str, lat: float, lon: float, radius_km: float, k: int = 10):
+    """Semantic search filtered by location."""
     query_embedding = get_embedding(query)
     
     return client.search(
-        index="estabelecimentos_v001",
+        index="establishments_v001",
         body={
             "query": {
                 "bool": {
@@ -661,8 +661,8 @@ def busca_vetorial_geo(query: str, lat: float, lon: float, raio_km: float, k: in
                     },
                     "filter": {
                         "geo_distance": {
-                            "distance": f"{raio_km}km",
-                            "localizacao": {"lat": lat, "lon": lon}
+                            "distance": f"{radius_km}km",
+                            "location": {"lat": lat, "lon": lon}
                         }
                     }
                 }
@@ -671,34 +671,34 @@ def busca_vetorial_geo(query: str, lat: float, lon: float, raio_km: float, k: in
     )
 ```
 
-#### Abordagem 3: Híbrida Completa (BM25 + k-NN + Geo)
+#### Approach 3: Complete Hybrid (BM25 + k-NN + Geo)
 
 ```python
-def busca_hibrida_completa(
+def search_hybrid_complete(
     query: str, 
     lat: float, 
     lon: float, 
-    raio_km: float,
-    peso_bm25: float = 0.3,
-    peso_knn: float = 0.7
+    radius_km: float,
+    bm25_weight: float = 0.3,
+    knn_weight: float = 0.7
 ):
-    """Combina BM25 e k-NN com script_score."""
+    """Combines BM25 and k-NN with script_score."""
     query_embedding = get_embedding(query)
     
     return client.search(
-        index="estabelecimentos_v001",
+        index="establishments_v001",
         body={
             "query": {
                 "script_score": {
                     "query": {
                         "bool": {
                             "should": [
-                                {"multi_match": {"query": query, "fields": ["texto_busca"]}}
+                                {"multi_match": {"query": query, "fields": ["search_text"]}}
                             ],
                             "filter": {
                                 "geo_distance": {
-                                    "distance": f"{raio_km}km",
-                                    "localizacao": {"lat": lat, "lon": lon}
+                                    "distance": f"{radius_km}km",
+                                    "location": {"lat": lat, "lon": lon}
                                 }
                             }
                         }
@@ -707,7 +707,7 @@ def busca_hibrida_completa(
                         "source": f"""
                             double bm25 = _score;
                             double knn = cosineSimilarity(params.vec, 'embedding') + 1.0;
-                            return ({peso_bm25} * bm25) + ({peso_knn} * knn);
+                            return ({bm25_weight} * bm25) + ({knn_weight} * knn);
                         """,
                         "params": {"vec": query_embedding}
                     }
@@ -719,22 +719,22 @@ def busca_hibrida_completa(
 
 ---
 
-## 6. Otimização e Performance
+## 6. Optimization and Performance
 
-### 6.1 Tuning de k-NN (HNSW Parameters)
+### 6.1 k-NN Tuning (HNSW Parameters)
 
-O algoritmo HNSW tem dois parâmetros principais:
+The HNSW algorithm has two main parameters:
 
-| Parâmetro | Default | Descrição | Trade-off |
-|-----------|---------|-----------|-----------|
-| `m` | 16 | Conexões por nó | ↑ = mais preciso, mais memória |
-| `ef_construction` | 100 | Qualidade do grafo | ↑ = indexação mais lenta, busca melhor |
-| `ef_search` | 100 | Candidatos na busca | ↑ = mais preciso, mais lento |
+| Parameter | Default | Description | Trade-off |
+|-----------|---------|-------------|-----------|
+| `m` | 16 | Connections per node | ↑ = more accurate, more memory |
+| `ef_construction` | 100 | Graph quality | ↑ = slower indexing, better search |
+| `ef_search` | 100 | Search candidates | ↑ = more accurate, slower |
 
-**Recomendações por cenário:**
+**Recommendations by scenario:**
 
 ```json
-// Alta precisão (< 1M docs)
+// High precision (< 1M docs)
 {
   "method": {
     "parameters": {
@@ -744,7 +744,7 @@ O algoritmo HNSW tem dois parâmetros principais:
   }
 }
 
-// Alto volume (> 10M docs)
+// High volume (> 10M docs)
 {
   "method": {
     "parameters": {
@@ -759,28 +759,28 @@ O algoritmo HNSW tem dois parâmetros principais:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  ESTRATÉGIA DE SHARDS                                           │
+│  SHARDING STRATEGY                                              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Volume          Shards    Replicas    Observação               │
+│  Volume          Shards    Replicas    Notes                    │
 │  ─────────────────────────────────────────────────────────────  │
-│  < 1M docs       1         1           Single shard é mais      │
-│                                        rápido para k-NN         │
+│  < 1M docs       1         1           Single shard is faster   │
+│                                        for k-NN                 │
 │                                                                 │
-│  1M - 10M        3         1           Balancear carga          │
+│  1M - 10M        3         1           Load balancing           │
 │                                                                 │
-│  > 10M           5-10      1-2         Considerar índices       │
-│                                        por região/categoria     │
+│  > 10M           5-10      1-2         Consider indices         │
+│                                        by region/category       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 6.3 Caching e Warmup
+### 6.3 Caching and Warmup
 
 ```python
-# Warmup de índice k-NN
+# k-NN index warmup
 client.indices.put_settings(
-    index="estabelecimentos_v001",
+    index="establishments_v001",
     body={
         "index": {
             "knn.algo_param.ef_search": 100
@@ -788,32 +788,32 @@ client.indices.put_settings(
     }
 )
 
-# Forçar warmup do cache
+# Force cache warmup
 client.search(
-    index="estabelecimentos_v001",
+    index="establishments_v001",
     body={"query": {"knn": {"embedding": {"vector": warmup_vector, "k": 1}}}}
 )
 ```
 
-### 6.4 Benchmarks Comparativos
+### 6.4 Comparative Benchmarks
 
-| Query Type | Latência (p50) | Latência (p99) | Recall@10 |
-|------------|---------------|----------------|-----------|
+| Query Type | Latency (p50) | Latency (p99) | Recall@10 |
+|------------|---------------|---------------|-----------|
 | Full-text only | 15ms | 45ms | 0.65 |
 | k-NN only | 25ms | 80ms | 0.85 |
-| Híbrida (BM25+kNN) | 40ms | 120ms | **0.92** |
-| Híbrida + Geo | 50ms | 150ms | **0.92** |
+| Hybrid (BM25+kNN) | 40ms | 120ms | **0.92** |
+| Hybrid + Geo | 50ms | 150ms | **0.92** |
 
-*Testado com 200K documentos, 3 shards, m=16, ef=100*
+*Tested with 200K documents, 3 shards, m=16, ef=100*
 
 ---
 
-## 7. Produção e Observabilidade
+## 7. Production and Observability
 
-### 7.1 Monitoramento de Latência
+### 7.1 Latency Monitoring
 
 ```python
-# Middleware para logging de queries
+# Middleware for query logging
 import time
 import structlog
 
@@ -823,7 +823,7 @@ async def search_with_metrics(query_body: dict):
     start = time.perf_counter()
     
     response = await client.search(
-        index="estabelecimentos_v001",
+        index="establishments_v001",
         body=query_body
     )
     
@@ -841,18 +841,18 @@ async def search_with_metrics(query_body: dict):
     return response
 ```
 
-### 7.2 A/B Testing de Relevância
+### 7.2 Relevance A/B Testing
 
 ```python
-# Feature flags para testar pesos diferentes
+# Feature flags to test different weights
 SEARCH_CONFIGS = {
-    "control": {"peso_bm25": 0.5, "peso_knn": 0.5},
-    "variant_a": {"peso_bm25": 0.3, "peso_knn": 0.7},
-    "variant_b": {"peso_bm25": 0.2, "peso_knn": 0.8},
+    "control": {"bm25_weight": 0.5, "knn_weight": 0.5},
+    "variant_a": {"bm25_weight": 0.3, "knn_weight": 0.7},
+    "variant_b": {"bm25_weight": 0.2, "knn_weight": 0.8},
 }
 
 def get_search_config(user_id: str) -> dict:
-    """Determina config baseado no hash do user_id."""
+    """Determines config based on user_id hash."""
     bucket = hash(user_id) % 100
     
     if bucket < 33:
@@ -867,23 +867,23 @@ def get_search_config(user_id: str) -> dict:
 
 ```python
 async def search_with_fallback(query: str, lat: float, lon: float):
-    """Busca com fallbacks progressivos."""
+    """Search with progressive fallbacks."""
     
     try:
-        # Tentativa 1: Híbrida completa
-        return await busca_hibrida_completa(query, lat, lon, raio_km=10)
+        # Attempt 1: Complete hybrid
+        return await search_hybrid_complete(query, lat, lon, radius_km=10)
     except Exception as e:
         logger.warning("hybrid_search_failed", error=str(e))
     
     try:
-        # Fallback 2: Apenas full-text + geo
-        return await busca_fulltext_geo(query, lat, lon, raio_km=10)
+        # Fallback 2: Full-text + geo only
+        return await search_fulltext_geo(query, lat, lon, radius_km=10)
     except Exception as e:
         logger.warning("fulltext_search_failed", error=str(e))
     
     try:
-        # Fallback 3: Apenas full-text (sem geo)
-        return await busca_fulltext(query)
+        # Fallback 3: Full-text only (no geo)
+        return await search_fulltext(query)
     except Exception as e:
         logger.error("all_searches_failed", error=str(e))
         raise
@@ -891,84 +891,83 @@ async def search_with_fallback(query: str, lat: float, lon: float):
 
 ---
 
-## 8. Conclusão
+## 8. Conclusion
 
-### Resumo das Técnicas
+### Techniques Summary
 
-| Técnica | Quando Usar | Exemplo |
-|---------|-------------|---------|
-| **Full-Text (BM25)** | Termos específicos, códigos | "CNAE 4520001" |
-| **Vetorial (k-NN)** | Linguagem natural, sinônimos | "conserto de carro" |
-| **Geoespacial** | Proximidade física | "perto de mim" |
-| **Híbrida** | Combinação de critérios | "oficina mecânica próxima" |
+| Technique | When to Use | Example |
+|-----------|-------------|---------|
+| **Full-Text (BM25)** | Specific terms, codes | "NAICS 811111" |
+| **Vector (k-NN)** | Natural language, synonyms | "car repair" |
+| **Geospatial** | Physical proximity | "near me" |
+| **Hybrid** | Combination of criteria | "nearby auto shop" |
 
-### Trade-offs e Decisões de Design
+### Trade-offs and Design Decisions
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  TRADE-OFFS                                                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Precisão vs Velocidade                                         │
-│  ├── Mais k (k-NN) = mais preciso, mais lento                  │
-│  └── ef_search maior = melhor recall, maior latência           │
+│  Precision vs Speed                                             │
+│  ├── Higher k (k-NN) = more accurate, slower                   │
+│  └── Higher ef_search = better recall, higher latency          │
 │                                                                 │
-│  Custo vs Qualidade                                             │
-│  ├── Embeddings requerem API calls (custo)                     │
-│  └── Modelos maiores = melhor qualidade, mais caro             │
+│  Cost vs Quality                                                │
+│  ├── Embeddings require API calls (cost)                       │
+│  └── Larger models = better quality, more expensive            │
 │                                                                 │
-│  Simplicidade vs Flexibilidade                                  │
-│  ├── Full-text apenas = simples, limitado                      │
-│  └── Híbrido = complexo, poderoso                              │
+│  Simplicity vs Flexibility                                      │
+│  ├── Full-text only = simple, limited                          │
+│  └── Hybrid = complex, powerful                                │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Próximos Passos
+### Next Steps
 
-1. **Experimente** com seus próprios dados
-2. **Ajuste os pesos** BM25/k-NN via A/B testing
-3. **Monitore latência** e recall em produção
-4. **Considere** Neural Search do OpenSearch para pipelines avançados
+1. **Experiment** with your own data
+2. **Tune the weights** BM25/k-NN via A/B testing
+3. **Monitor latency** and recall in production
+4. **Consider** OpenSearch Neural Search for advanced pipelines
 
-### Recursos Adicionais
+### Additional Resources
 
-- 📁 [Código completo no repositório](./code/)
-- 📊 [Dataset de exemplo](./data/)
-- 🐳 [Docker Compose para ambiente local](./docker-compose.yml)
+- 📁 [Complete code in repository](./code/)
+- 📊 [Sample dataset](./data/)
+- 🐳 [Docker Compose for local environment](./docker-compose.yml)
 
 ---
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Subir OpenSearch local
-cd docs/articles/hybrid-search
+# 1. Start local OpenSearch
 docker-compose up -d
 
-# 2. Verificar se está rodando
+# 2. Verify it's running
 curl http://localhost:9200
 
-# 3. Configurar Azure OpenAI
+# 3. Configure Azure OpenAI
 cd code
 cp env-template.txt .env
-# Edite .env com suas credenciais Azure OpenAI
+# Edit .env with your Azure OpenAI credentials
 nano .env
 
-# 4. Instalar dependências e executar
+# 4. Install dependencies and run
 pip install -r requirements.txt
-python 01_create_index.py        # Criar índice
-python 02_generate_data.py       # Gerar dados fictícios
-python 03_index_with_embeddings.py  # Indexar com embeddings
-python 04_hybrid_queries.py      # Testar queries
+python 01_create_index.py           # Create index
+python 02_generate_data.py          # Generate sample data
+python 03_index_with_embeddings.py  # Index with embeddings
+python 04_hybrid_queries.py         # Test queries
 
-# 5. Acessar Dashboards (opcional)
+# 5. Access Dashboards (optional)
 open http://localhost:5601
 ```
 
 ---
 
-## 📚 Referências
+## 📚 References
 
 - [OpenSearch Documentation](https://opensearch.org/docs/latest/)
 - [Elasticsearch Guide](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html)
@@ -979,6 +978,6 @@ open http://localhost:5601
 
 ---
 
-**Autor:** Leonardo de Melo (demelo01@gmail.com)  
-**Data:** Fevereiro 2026  
-**Licença:** MIT
+**Author:** Leonardo de Melo (demelo01@gmail.com)  
+**Date:** February 2026  
+**License:** MIT
